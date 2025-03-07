@@ -31,6 +31,8 @@ abstract class MessageWithCsvContext {
   def content: String
 
   def constraints: String
+
+  def csvFilePath: Option[String]
 }
 
 case class ErrorWithCsvContext(
@@ -39,7 +41,8 @@ case class ErrorWithCsvContext(
                                 row: String,
                                 column: String,
                                 content: String,
-                                constraints: String
+                                constraints: String,
+                                csvFilePath: Option[String] = None
                               ) extends MessageWithCsvContext {}
 
 case class WarningWithCsvContext(
@@ -48,5 +51,6 @@ case class WarningWithCsvContext(
                                   row: String,
                                   column: String,
                                   content: String,
-                                  constraints: String
+                                  constraints: String,
+                                  csvFilePath: Option[String] = None
                                 ) extends MessageWithCsvContext {}

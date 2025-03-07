@@ -57,11 +57,10 @@ object TableGroup {
     }
 
     parseTables(standardisedTableGroupNode)
-      .flatMap({
-        case tablesWithWarningsAndErrors =>
+      .flatMap(tablesWithWarningsAndErrors =>
           linkForeignKeysToReferencedTables(tablesWithWarningsAndErrors.component)
             .map(tables => tablesWithWarningsAndErrors.copy(component = tables))
-      })
+      )
       .flatMap(tablesWithWarningsAndErrors => {
         for {
           dialect <- parseDialect(standardisedTableGroupNode)
@@ -452,7 +451,7 @@ case class TableGroup private(
                                            foreignKeyDefinitionsByTable: MapTableToForeignKeyDefinitions,
                                            referencedTable: Table,
                                            foreignKeyReference: ReferencedTableForeignKeyReference,
-                                           allValidValues: Set[KeyWithContext]
+                                           allValidValues: Set[KeyValueWithContext]
                                          ): TolerableErrors = {
     val keysReferencesInOriginTable = getKeysReferencedInOriginTable(
       foreignKeyDefinitionsByTable,
@@ -461,18 +460,21 @@ case class TableGroup private(
     )
 
     getUnmatchedForeignKeyReferences(
+      foreignKeyReference,
       allValidValues,
       keysReferencesInOriginTable
     ) ++
       getDuplicateKeysInReferencedTable(
+        foreignKeyReference,
         allValidValues,
         keysReferencesInOriginTable
       )
   }
 
   private def getDuplicateKeysInReferencedTable(
-                                                 allPossibleParentTableValues: Set[KeyWithContext],
-                                                 keysReferencesInOriginTable: Set[KeyWithContext]
+                                                 referencedTableForeignKeyReference: ReferencedTableForeignKeyReference,
+                                                 allPossibleParentTableValues: Set[KeyValueWithContext],
+                                                 keysReferencesInOriginTable: Set[KeyValueWithContext]
                                                ): TolerableErrors = {
     val duplicateKeysInParent = allPossibleParentTableValues
       .intersect(keysReferencesInOriginTable)
@@ -487,7 +489,8 @@ case class TableGroup private(
             k.rowNumber.toString,
             "",
             k.keyValuesToString(),
-            ""
+            "",
+            csvFilePath = Some(referencedTableForeignKeyReference.referencedTable.url)
           )
         )
         .toArray
@@ -497,8 +500,9 @@ case class TableGroup private(
   }
 
   private def getUnmatchedForeignKeyReferences(
-                                                allPossibleParentTableValues: Set[KeyWithContext],
-                                                keysReferencesInOriginTable: Set[KeyWithContext]
+                                                referencedTableForeignKeyReference: ReferencedTableForeignKeyReference,
+                                                allPossibleParentTableValues: Set[KeyValueWithContext],
+                                                keysReferencesInOriginTable: Set[KeyValueWithContext]
                                               ): TolerableErrors = {
     val keyValuesNotDefinedInParent =
       keysReferencesInOriginTable.diff(allPossibleParentTableValues)
@@ -509,9 +513,10 @@ case class TableGroup private(
             "unmatched_foreign_key_reference",
             "schema",
             k.rowNumber.toString,
-            "",
+            referencedTableForeignKeyReference.foreignKeyDefinition.localColumns.map(_.name.getOrElse("")).mkString,
             k.keyValuesToString(),
-            ""
+            "",
+            csvFilePath = Some(referencedTableForeignKeyReference.definitionTable.url)
           )
         )
         .toArray
@@ -524,7 +529,7 @@ case class TableGroup private(
                                               foreignKeyDefinitionsByTable: MapTableToForeignKeyDefinitions,
                                               referencedTable: Table,
                                               parentTableForeignKeyReference: ReferencedTableForeignKeyReference
-                                            ): Set[KeyWithContext] = {
+                                            ): Set[KeyValueWithContext] = {
     val foreignKeyDefinitionsOnTable = foreignKeyDefinitionsByTable
       .getOrElse(
         parentTableForeignKeyReference.definitionTable,

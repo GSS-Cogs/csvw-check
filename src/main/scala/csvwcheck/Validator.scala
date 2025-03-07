@@ -53,10 +53,8 @@ class Validator(
           val metadataJsonLocation =
             csvwLinkHeaderRegEx.replaceAllIn(header, "$1")
           // Now make the URL absolute if it isn't already.
-          new URL(
-            new URL(getUriWithoutQueryString(csvUri).toString),
-            metadataJsonLocation
-          ).toURI
+          getUriWithoutQueryString(csvUri)
+            .resolve(metadataJsonLocation)
         })
     } else {
       None

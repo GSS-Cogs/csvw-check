@@ -575,11 +575,13 @@ object Utils {
       .map((_, noWarnings, csvwPropertyType))
   }
 
-  def toAbsoluteUrl(possiblyRelativeUrl: String, baseUrl: String): String =
+  private def toAbsoluteUrl(possiblyRelativeUrl: String, baseUrl: String): String =
     if (baseUrl.isEmpty) {
       possiblyRelativeUrl
     } else {
-      new URL(new URL(baseUrl), possiblyRelativeUrl).toString
+      new URI(baseUrl)
+        .resolve(possiblyRelativeUrl)
+        .toString
     }
 
   def normaliseNaturalLanguageProperty(

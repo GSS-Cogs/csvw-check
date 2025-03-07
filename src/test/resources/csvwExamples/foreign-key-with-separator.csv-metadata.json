@@ -1,0 +1,62 @@
+{
+  "@context": "http://www.w3.org/ns/csvw",
+  "tables": [
+    {
+      "url": "countries.csv",
+      "tableSchema": {
+        "columns": [
+          {
+            "name": "countryCode",
+            "titles": "countryCode",
+            "datatype": "string",
+            "propertyUrl": "http://www.geonames.org/ontology{#_name}"
+          },
+          {
+            "name": "latitude",
+            "titles": "latitude",
+            "datatype": "number"
+          },
+          {
+            "name": "longitude",
+            "titles": "longitude",
+            "datatype": "number"
+          },
+          {
+            "name": "name",
+            "titles": "name",
+            "datatype": "string"
+          }
+        ],
+        "aboutUrl": "http://example.org/countries.csv{#countryCode}",
+        "propertyUrl": "http://schema.org/{_name}",
+        "primaryKey": "countryCode"
+      }
+    },
+    {
+      "url": "foreign-key-with-separator.csv",
+      "tableSchema": {
+        "columns": [
+          {
+            "name": "countryRefs",
+            "titles": "countryRefs",
+            "separator": "|",
+            "ordered": false
+          },
+          {
+            "name": "info",
+            "titles": "info"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "columnReference": "countryRefs",
+            "reference": {
+              "resource": "countries.csv",
+              "columnReference": "countryCode"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

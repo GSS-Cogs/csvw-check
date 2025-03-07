@@ -29,7 +29,7 @@ case class ReferencedTableForeignKeyReference(
                                                  * The table the foreign key was defined on.
                                                  */
                                                definitionTable: Table
-                                             ) {
+                                             ) extends Key {
   override def toString: String =
     s"ReferencedTableForeignKeyReference($definitionTable.[${
       foreignKeyDefinition.localColumns

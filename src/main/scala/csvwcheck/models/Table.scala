@@ -24,6 +24,7 @@ import csvwcheck.errors.{ErrorWithCsvContext, MetadataError, WarningWithCsvConte
 import csvwcheck.models
 import csvwcheck.models.ParseResult.ParseResult
 import csvwcheck.models.Table.csvDownloadsTemporaryDirectory
+import csvwcheck.models.Values.{ColumnValue, KeyComponentValue, KeyValue}
 import csvwcheck.normalisation.InheritedProperties
 import csvwcheck.normalisation.Utils.parseNodeAsText
 import csvwcheck.traits.JavaIteratorExtensions.IteratorHasAsScalaArray
@@ -46,9 +47,9 @@ import scala.util.control.NonFatal
 
 object Table {
   type MapForeignKeyDefinitionToValues =
-    Map[ForeignKeyDefinition, Set[KeyWithContext]]
+    Map[ForeignKeyDefinition, Set[KeyValueWithContext]]
   type MapForeignKeyReferenceToValues =
-    Map[ReferencedTableForeignKeyReference, Set[KeyWithContext]]
+    Map[ReferencedTableForeignKeyReference, Set[KeyValueWithContext]]
   type PrimaryKeysAndErrors =
     (mutable.Set[List[Any]], ArrayBuffer[ErrorWithCsvContext])
 
@@ -201,8 +202,8 @@ case class Table private(
 
             (
               WarningsAndErrors(warnings = warnings),
-              Map[ForeignKeyDefinition, Set[KeyWithContext]](),
-              Map[ReferencedTableForeignKeyReference, Set[KeyWithContext]]()
+              Map[ForeignKeyDefinition, Set[KeyValueWithContext]](),
+              Map[ReferencedTableForeignKeyReference, Set[KeyValueWithContext]]()
             )
         }
       case Left(warningsAndErrors) =>
@@ -210,8 +211,8 @@ case class Table private(
           List(
             (
               warningsAndErrors,
-              Map[ForeignKeyDefinition, Set[KeyWithContext]](),
-              Map[ReferencedTableForeignKeyReference, Set[KeyWithContext]]()
+              Map[ForeignKeyDefinition, Set[KeyValueWithContext]](),
+              Map[ReferencedTableForeignKeyReference, Set[KeyValueWithContext]]()
             )
           )
         )
@@ -235,7 +236,7 @@ case class Table private(
       formatBuilder.setEscape('\\')
     }
 
-    formatBuilder.build()
+    formatBuilder.get()
   }
 
   private def validateHeader(
@@ -532,9 +533,9 @@ case class Table private(
                                                    existingPrimaryKeyValues: mutable.Set[List[Any]],
                                                    validateRowOutput: ValidateRowOutput
                                                  ): Option[ErrorWithCsvContext] = {
-    val primaryKeyValues = validateRowOutput.primaryKeyValues
+    val primaryKeyValues = validateRowOutput.primaryKeyValue
     if (
-      validateRowOutput.primaryKeyValues.nonEmpty && existingPrimaryKeyValues
+      validateRowOutput.primaryKeyValue.nonEmpty && existingPrimaryKeyValues
         .contains(
           primaryKeyValues
         )
@@ -619,8 +620,8 @@ case class Table private(
                                                       mapPrimaryKeyHashToRowNumbers: Map[Int, Array[Long]],
                                                       validateRowOutput: ValidateRowOutput
                                                     ): Map[Int, Array[Long]] = {
-    val primaryKeyValueHash = validateRowOutput.primaryKeyValues.hashCode()
-    if (validateRowOutput.primaryKeyValues.nonEmpty) {
+    val primaryKeyValueHash = validateRowOutput.primaryKeyValue.hashCode()
+    if (validateRowOutput.primaryKeyValue.nonEmpty) {
       val existingRowsMatchingHash = mapPrimaryKeyHashToRowNumbers.getOrElse(
         primaryKeyValueHash,
         Array[Long]()
@@ -640,15 +641,15 @@ case class Table private(
                                                        ): MapForeignKeyReferenceToValues =
     validateRowOutput.parentTableForeignKeyReferences
       .foldLeft(mapReferencedTableToForeignKeyValues)({
-        case (acc, (keyReference, keyValues)) =>
+        case (acc, (keyReference, keyValue)) =>
           val existingValues = acc.getOrElse(keyReference, Set())
-          if (existingValues.contains(keyValues)) {
+          if (existingValues.contains(keyValue)) {
             acc.updated(
               keyReference,
-              existingValues - keyValues + keyValues.copy(isDuplicate = true)
+              existingValues - keyValue + keyValue.copy(isDuplicate = true)
             )
           } else {
-            acc.updated(keyReference, existingValues + keyValues)
+            acc.updated(keyReference, existingValues + keyValue)
           }
       })
 
@@ -659,29 +660,27 @@ case class Table private(
     validateRowOutput.childTableForeignKeys.foldLeft(
       foreignKeyDefinitionsWithValues
     ) {
-      case (acc, (keyDefinition, keyValues)) =>
+      case (acc, (keyDefinition, keyValue)) =>
         val valuesForKey = acc
           .getOrElse(keyDefinition, Set())
-        acc.updated(keyDefinition, valuesForKey + keyValues)
+        acc.updated(keyDefinition, valuesForKey + keyValue)
     }
 
   private def validateRow(row: CSVRecord): ValidateRowOutput = {
     var errors = Array[ErrorWithCsvContext]()
-    val primaryKeyValues = ArrayBuffer.empty[Any]
+    val primaryKeyValue = ArrayBuffer.empty[KeyComponentValue]
     val foreignKeyReferenceValues =
       ArrayBuffer.empty[
-        (ReferencedTableForeignKeyReference, List[Any])
+        (ReferencedTableForeignKeyReference, ColumnValue)
       ] // to store the validated referenced Table Columns values in each row
-    val foreignKeyValues = {
-      ArrayBuffer.empty[
+    val foreignKeyValues = ArrayBuffer.empty[
         (ForeignKeyDefinition, List[Any])
       ] // to store the validated foreign key values in each row
-    }
 
     schema.foreach(s => {
       for ((value, column) <- row.iterator.asScalaArray.zip(s.columns)) {
         //catch any exception here, possibly outOfBounds  and set warning too many values
-        val (es, newValue) = column.validate(value)
+        val (es, parsedColumnValue) = column.validate(value)
         errors = errors ++ es.map(e =>
           ErrorWithCsvContext(
             e.`type`,
@@ -693,7 +692,15 @@ case class Table private(
           )
         )
         if (s.primaryKey.contains(column)) {
-          primaryKeyValues.addAll(newValue)
+          // If you choose to reference a list-column in a primary key, then we treat each list item as contributing
+          // to the uniqueness of your primary key; this is consistent with how you would be able to use said values
+          // to define an `aboutURL` for the row; i.e. you are forced to concatenate the string values of your list
+          // items to create an amalgamated identifier.
+          // See <https://lists.w3.org/Archives/Public/public-csvw/2016Aug/0001.html>.
+          // Also see code reference 7da26b34-efa5-11ef-8180-57883ec4256f.
+          //
+          // The below `addAll` is consistent with that approach.
+          primaryKeyValue.addAll(parsedColumnValue)
         }
 
         for (foreignKeyReferenceObject <- foreignKeyReferences) {
@@ -703,14 +710,14 @@ case class Table private(
             )
           ) {
             foreignKeyReferenceValues.addOne(
-              (foreignKeyReferenceObject, newValue)
+              (foreignKeyReferenceObject, parsedColumnValue)
             )
           }
         }
 
         for (foreignKeyWrapperObject <- s.foreignKeys) {
           if (foreignKeyWrapperObject.localColumns.contains(column)) {
-            foreignKeyValues.addOne((foreignKeyWrapperObject, newValue))
+            foreignKeyValues.addOne((foreignKeyWrapperObject, parsedColumnValue))
           }
         }
       }
@@ -719,42 +726,35 @@ case class Table private(
     ValidateRowOutput(
       row.getRecordNumber,
       WarningsAndErrors(Array(), errors),
-      primaryKeyValues.toList,
-      getForeignKeyReferencesWithPossibleValues(
-        foreignKeyReferenceValues.toList,
-        row
-      ),
-      getForeignKeyDefinitionsWithValues(foreignKeyValues.toList, row)
+      primaryKeyValue.toList,
+      assembleValuesForEachKey(foreignKeyReferenceValues.toList, row),
+      assembleValuesForEachKey(foreignKeyValues.toList, row)
     )
   }
 
-  private def getForeignKeyDefinitionsWithValues(
-                                                  foreignKeyValues: List[(ForeignKeyDefinition, List[Any])],
-                                                  row: CSVRecord
-                                                ): Predef.Map[ForeignKeyDefinition, KeyWithContext] = {
-    foreignKeyValues
+  /**
+   * Returns a map from the key to the values
+   * @param keysWithColumnValues - A list of all of the keys and their column values
+   * @param row - The row in the CSV file being parsed.
+   * @tparam TKey - Must inherit from the abstract `csvwcheck.models.Key` case class.
+   * @return
+   */
+  private def assembleValuesForEachKey[TKey <: Key](
+                                                     keysWithColumnValues: List[(TKey, ColumnValue)],
+                                                     row: CSVRecord
+                                                ): Predef.Map[TKey, KeyValueWithContext] = {
+    keysWithColumnValues
       .groupBy {
-        case (k, _) => k
+        case (keyDefinition, _) => keyDefinition
       }
       .map {
-        case (k, values) =>
-          (k, KeyWithContext(row.getRecordNumber, values.map(v => v._2)))
-      }
-  }
+        case (keyDefinition, keyDefinitionsWithValues) =>
+          val columnValuesForKey = keyDefinitionsWithValues.map({case (_, columnValue) => columnValue})
+          // Purposefully ignore the fact that a column may have more than one value as this is undefined behaviour.
+          // Code reference: 7da26b34-efa5-11ef-8180-57883ec4256f
+          val solitaryKeyValue = columnValuesForKey.map(columnValue => columnValue.mkString.asInstanceOf[KeyComponentValue])
 
-  private def getForeignKeyReferencesWithPossibleValues(
-                                                         foreignKeyReferenceValues: List[
-                                                           (ReferencedTableForeignKeyReference, List[Any])
-                                                         ],
-                                                         row: CSVRecord
-                                                       ): Predef.Map[ReferencedTableForeignKeyReference, KeyWithContext] = {
-    foreignKeyReferenceValues
-      .groupBy {
-        case (k, _) => k
-      }
-      .map {
-        case (k, values) =>
-          (k, KeyWithContext(row.getRecordNumber, values.map(v => v._2)))
+          (keyDefinition, KeyValueWithContext(row.getRecordNumber, solitaryKeyValue))
       }
   }
 

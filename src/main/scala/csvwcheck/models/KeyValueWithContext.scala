@@ -16,10 +16,12 @@
 
 package csvwcheck.models
 
-case class KeyWithContext(
-                           rowNumber: Long,
-                           keyValues: List[Any],
-                           var isDuplicate: Boolean = false
+import csvwcheck.models.Values.KeyValue
+
+case class KeyValueWithContext(
+                                rowNumber: Long,
+                                keyValue: KeyValue,
+                                var isDuplicate: Boolean = false
                          ) {
 
   /**
@@ -29,13 +31,13 @@ case class KeyWithContext(
     */
   override def equals(obj: Any): Boolean =
     obj != null &&
-      obj.isInstanceOf[KeyWithContext] &&
-      this.keyValues.equals(obj.asInstanceOf[KeyWithContext].keyValues)
+      obj.isInstanceOf[KeyValueWithContext] &&
+      this.keyValue.equals(obj.asInstanceOf[KeyValueWithContext].keyValue)
 
-  override def hashCode(): Int = this.keyValues.hashCode()
+  override def hashCode(): Int = this.keyValue.hashCode()
 
   def keyValuesToString(): String = {
-    val stringList = keyValues.map {
+    val stringList = keyValue.map {
       case listOfAny: List[Any] =>
         listOfAny.map(s => s.toString).mkString(",")
       case i => i.toString

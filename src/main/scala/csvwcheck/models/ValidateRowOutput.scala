@@ -16,13 +16,15 @@
 
 package csvwcheck.models
 
+import csvwcheck.models.Values.KeyValue
+
 case class ValidateRowOutput(
                               recordNumber: Long,
                               warningsAndErrors: WarningsAndErrors = WarningsAndErrors(),
-                              primaryKeyValues: List[Any] = List(),
+                              primaryKeyValue: KeyValue = List(),
                               parentTableForeignKeyReferences: Map[
                                 ReferencedTableForeignKeyReference,
-                                KeyWithContext
+                                KeyValueWithContext
                               ] = Map(),
-                              childTableForeignKeys: Map[ForeignKeyDefinition, KeyWithContext] = Map()
+                              childTableForeignKeys: Map[ForeignKeyDefinition, KeyValueWithContext] = Map()
                             )

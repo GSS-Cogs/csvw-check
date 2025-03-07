@@ -261,11 +261,18 @@ object TableSchema {
           val columnReference = columnReferenceElementTextNode.asText
           columns
             .find(col => col.name.contains(columnReference))
-            .map(Right(_))
+            .map(col => {
+              if (col.separator.isEmpty) {
+                Right(col)
+              } else {
+                // Code reference: 7da26b34-efa5-11ef-8180-57883ec4256f
+                Left(MetadataError(s"foreign key references list column '$columnReference'; behaviour is undefined"))
+              }
+            })
             .getOrElse(
               Left(
                 MetadataError(
-                  s"foreignKey references non-existent column - $columnReference"
+                  s"foreignKey references non-existent column '$columnReference'"
                 )
               )
             )

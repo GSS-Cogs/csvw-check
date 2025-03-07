@@ -69,7 +69,6 @@ object Main extends App {
 
       implicit val actorSystem: ActorSystem = ActorSystem("actor-system")
 
-
       val numParallelThreads: Int = sys.env.get("PARALLELISM") match {
         case Some(value) => value.toInt
         case None => Runtime.getRuntime.availableProcessors()
@@ -116,6 +115,14 @@ object Main extends App {
     val rootLogger = Logger("ROOT")
     val underlyingLogger = rootLogger.underlying.asInstanceOf[ch.qos.logback.classic.Logger]
     underlyingLogger.setLevel(logLevel)
+
+    val akkaLogLevel = logLevel match {
+      case Level.WARN => "WARNING"
+      case Level.TRACE => "DEBUG"
+      case Level.OFF|Level.INFO|Level.DEBUG|Level.ERROR => logLevel.toString
+    }
+    System.setProperty("akka.loglevel", akkaLogLevel)
+
     rootLogger
   }
 
@@ -123,14 +130,20 @@ object Main extends App {
                                         errorMessage: MessageWithCsvContext
                                       ): String = {
     val message = new StringBuilder()
+
+    message.append(s"Type: ${errorMessage.`type`}")
+
+    errorMessage.csvFilePath
+      .foreach(csvFilePath => message.append(s" in CSV '$csvFilePath'"))
+
     if (errorMessage.row.nonEmpty) {
-      message.append(s"Row: ${errorMessage.row}$newLine")
+      message.append(s", Row: ${errorMessage.row}")
     }
     if (errorMessage.column.nonEmpty) {
-      message.append(s", Column: ${errorMessage.column}$newLine")
+      message.append(s", Column: '${errorMessage.column}'")
     }
     if (errorMessage.content.nonEmpty) {
-      message.append(s": ${errorMessage.content}$newLine")
+      message.append(s"$newLine${errorMessage.content}$newLine")
     }
 
     message.toString()

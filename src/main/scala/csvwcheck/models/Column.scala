@@ -23,6 +23,7 @@ import csvwcheck.errors.{ErrorWithCsvContext, ErrorWithoutContext, MetadataError
 import csvwcheck.models
 import csvwcheck.models.Column._
 import csvwcheck.models.ParseResult.ParseResult
+import csvwcheck.models.Values.ColumnValue
 import csvwcheck.normalisation.Constants.undefinedLanguage
 import csvwcheck.normalisation.Utils.parseNodeAsText
 import csvwcheck.numberformatparser.LdmlNumberFormatParser
@@ -33,6 +34,7 @@ import org.joda.time.{DateTime, DateTimeZone}
 
 import java.math.BigInteger
 import java.time.{LocalDateTime, Month, ZoneId, ZonedDateTime}
+import java.util.regex.Pattern
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters.IteratorHasAsScala
 import scala.math.BigInt.javaBigInteger2bigInt
@@ -1135,7 +1137,7 @@ case class Column private(
 
   def validate(
                 value: String
-              ): (Array[ErrorWithoutContext], List[Any]) = {
+              ): (Array[ErrorWithoutContext], ColumnValue) = {
     val errors = ArrayBuffer.empty[ErrorWithoutContext]
     if (nullParam.contains(value)) {
       // Since the cell value is among the null values specified for this CSV-W, it can be considered as the default null value which is ""
@@ -1145,9 +1147,9 @@ case class Column private(
       }
       (errors.toArray, List.empty)
     } else {
-      val valuesArrayToReturn = ArrayBuffer.empty[Any]
+      val parsedColumnValues = ArrayBuffer.empty[Any]
       val values = separator match {
-        case Some(separator) => value.split(separator)
+        case Some(separator) => value.split(Pattern.quote(separator))
         case None => Array[String](value)
       }
       val parserForDataType = datatypeParser(baseDataType)
@@ -1160,7 +1162,7 @@ case class Column private(
                 s"'$v' - ${errorMessageContent.content} (${format.flatMap(_.pattern).getOrElse("no format provided")})"
               )
             )
-            valuesArrayToReturn.addOne(s"invalid - $v")
+            parsedColumnValues.addOne(s"invalid - $v")
           case Right(s) =>
             errors.addAll(validateLength(s.toString))
             errors.addAll(validateValue(s))
@@ -1174,11 +1176,11 @@ case class Column private(
             }
 
             if (errors.isEmpty) {
-              valuesArrayToReturn.addOne(s)
+              parsedColumnValues.addOne(s)
             }
         }
       }
-      (errors.toArray, valuesArrayToReturn.toList)
+      (errors.toArray, parsedColumnValues.toList)
     }
   }
 

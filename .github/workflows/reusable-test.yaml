@@ -10,7 +10,7 @@ jobs:
   test_in_environments:
     runs-on: ${{ inputs.os }}
     container:
-      image: sbtscala/scala-sbt:graalvm-ce-22.3.0-b2-java17_1.8.3_2.13.10
+      image: sbtscala/scala-sbt:graalvm-ce-22.3.3-b1-java17_1.10.7_3.6.3
     steps:
       - uses: actions/checkout@v3
         with:
@@ -24,7 +24,7 @@ jobs:
 
       - name: Archive test results from xml files
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.os }} test results
           path: |
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.os }} test results
 
